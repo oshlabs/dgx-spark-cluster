@@ -1,21 +1,5 @@
 # System setup — DGX Spark cluster
 
-```
-                172.31.0.0/23  (10GbE management LAN)
-    ═══════════╤═════════════════════════════════════╤═══════════
-               │                                     │
-               │ 172.31.0.100 (enP7s7)               │ 172.31.0.101 (enP7s7)
-       ┌───────┴───────┐                     ┌───────┴───────┐
-       │   spark-702b  │                     │   spark-20db  │
-       │               │                     │               │
-       │  enp1s0f0np0  │                     │  enp1s0f0np0  │
-       │  172.31.5.3   │    172.31.5.0/28    │  172.31.5.4   │
-       │               ├═════════════════════┤               │ 
-       │ enP2p1s0f0np0 │      QSFP56 DAC     │ enP2p1s0f0np0 │
-       │ (no ip addr)  │                     │ (no ip addr)  │
-       └───────────────┘                     └───────────────┘
-```
-
 Perform following steps while ssh'ed into the system (watch out for the steps changing the network - so may need console)
 
 ## Create nvidia user
@@ -69,8 +53,26 @@ sudo snap remove --purge core24 core22 bare
 sudo systemctl disable --now snapd snapd.socket snapd.seeded.service
 ```
 
-## Fix networking
+## Configure networking
 
+Topology:
+```
+                172.31.0.0/23  (10GbE management LAN)
+    ═══════════╤═════════════════════════════════════╤═══════════
+               │                                     │
+               │ 172.31.0.100 (enP7s7)               │ 172.31.0.101 (enP7s7)
+       ┌───────┴───────┐                     ┌───────┴───────┐
+       │   spark-702b  │                     │   spark-20db  │
+       │               │                     │               │
+       │  enp1s0f0np0  │                     │  enp1s0f0np0  │
+       │  172.31.5.3   │    172.31.5.0/28    │  172.31.5.4   │
+       │               ├═════════════════════┤               │ 
+       │ enP2p1s0f0np0 │      QSFP56 DAC     │ enP2p1s0f0np0 │
+       │ (no ip addr)  │                     │ (no ip addr)  │
+       └───────────────┘                     └───────────────┘
+```
+
+Configuration:
 ```bash
 sudo rm -f /etc/netplan/*
 
