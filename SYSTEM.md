@@ -55,24 +55,32 @@ sudo systemctl disable --now snapd snapd.socket snapd.seeded.service
 
 ## Configure networking
 
+The ConnectX-7 on a DGX Spark exposes two QSFP56 ports, but internally each port is wired to two PCIe x4 links — so plugging in a single DAC cable brings up **two** net devices per node ("twin" pair). Each twin is a separate RoCE device and must live on its own subnet; sharing a subnet confuses NCCL/RDMA autodiscovery.
+
+With one DAC cable connected, `enp1s0f0np0` and `enP2p1s0f0np0` are the active pair; the other pair (`.f1.np1`) belongs to the unused QSFP port and stays DOWN.
+
 Topology:
 ```
-                172.31.0.0/23  (10GbE management LAN)
-    ═══════════╤═════════════════════════════════════╤═══════════
-               │                                     │
-               │ 172.31.0.100 (enP7s7)               │ 172.31.0.101 (enP7s7)
-       ┌───────┴───────┐                     ┌───────┴───────┐
-       │   spark-702b  │                     │   spark-20db  │
-       │               │                     │               │
-       │  enp1s0f0np0  │                     │  enp1s0f0np0  │
-       │  172.31.5.3   │    172.31.5.0/28    │  172.31.5.4   │
-       │               ├═════════════════════┤               │ 
-       │ enP2p1s0f0np0 │      QSFP56 DAC     │ enP2p1s0f0np0 │
-       │ (no ip addr)  │                     │ (no ip addr)  │
-       └───────────────┘                     └───────────────┘
+                    172.31.0.0/23  (10GbE management LAN)
+    ═══════════╤═════════════════════════════════════════╤═══════════
+               │                                         │
+               │ 172.31.0.100 (enP7s7)                   │ 172.31.0.101 (enP7s7)
+       ┌───────┴───────┐                         ┌───────┴───────┐
+       │   spark-702b  │                         │   spark-20db  │
+       │               │                         │               │
+       │  enp1s0f0np0  │     172.31.5.0/29       │  enp1s0f0np0  │
+       │  172.31.5.1   ╞═════════════════════════╡  172.31.5.2   │
+       │               │                         │               │
+       │               │       QSFP56 DAC        │               │
+       │               │  (one cable — two PCIe  │               │
+       │               │    links / RoCE twins)  │               │
+       │               │                         │               │
+       │ enP2p1s0f0np0 │     172.31.5.8/29       │ enP2p1s0f0np0 │
+       │  172.31.5.9   ╞═════════════════════════╡  172.31.5.10  │
+       └───────────────┘                         └───────────────┘
 ```
 
-Configuration:
+Configuration (use `.1` / `.9` on node 1, `.2` / `.10` on node 2):
 ```bash
 sudo rm -f /etc/netplan/*
 
@@ -88,20 +96,20 @@ network:
       link-local: []
 EOF
 
-# use 172.31.5.3 on the first node, 172.31.5.4 on the next, etc
 sudo tee /etc/netplan/40-cx7.yaml <<EOF
 network:
   version: 2
   renderer: networkd
   ethernets:
     enp1s0f0np0:
-      addresses: [172.31.5.3/28]
-      mtu: 9216
+      addresses: [172.31.5.1/29]
+      mtu: 9000
       dhcp4: false
       dhcp6: false
       link-local: []
     enP2p1s0f0np0:
-      mtu: 9216
+      addresses: [172.31.5.9/29]
+      mtu: 9000
       dhcp4: false
       dhcp6: false
       link-local: []
@@ -112,29 +120,33 @@ sudo netplan generate
 sudo netplan apply
 ```
 
-This results in following network configuration:
+Verify:
+```bash
+ip -br addr show | grep -E 'enp1s0f|enP2p1s0f|enP7s7'
+ibdev2netdev
+# jumbo-frame sanity check from node 1 to node 2 on both twins:
+ping -c2 -M do -s 8972 172.31.5.2
+ping -c2 -M do -s 8972 172.31.5.10
 ```
-# the 10gbe interface:
 
-2: enP7s7: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
-    link/ether 4c:bb:47:81:70:2b brd ff:ff:ff:ff:ff:ff
-    altname enP7p1s0
-    inet 172.31.0.100/23 metric 100 brd 172.31.1.255 scope global dynamic enP7s7
-       valid_lft 3085sec preferred_lft 3085sec
-
-# the two qsfp58 cx7 nics:
-
-3: enp1s0f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9216 qdisc mq state UP group default qlen 1000
-    link/ether 4c:bb:47:81:70:2c brd ff:ff:ff:ff:ff:ff
-    inet 172.31.5.3/28 brd 172.31.5.15 scope global enp1s0f0np0
-       valid_lft forever preferred_lft forever
-4: enp1s0f1np1: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
-    link/ether 4c:bb:47:81:70:2d brd ff:ff:ff:ff:ff:ff
-5: enP2p1s0f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9216 qdisc mq state UP group default qlen 1000
-    link/ether 4c:bb:47:81:70:30 brd ff:ff:ff:ff:ff:ff
-6: enP2p1s0f1np1: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
-    link/ether 4c:bb:47:81:70:31 brd ff:ff:ff:ff:ff:ff
+Expected `ip -br addr` on node 1:
 ```
+enP7s7           UP             172.31.0.100/23 metric 100
+enp1s0f0np0      UP             172.31.5.1/29
+enp1s0f1np1      DOWN
+enP2p1s0f0np0    UP             172.31.5.9/29
+enP2p1s0f1np1    DOWN
+```
+
+Expected `ibdev2netdev`:
+```
+rocep1s0f0 port 1 ==> enp1s0f0np0 (Up)
+rocep1s0f1 port 1 ==> enp1s0f1np1 (Down)
+roceP2p1s0f0 port 1 ==> enP2p1s0f0np0 (Up)
+roceP2p1s0f1 port 1 ==> enP2p1s0f1np1 (Down)
+```
+
+The two RoCE devices paired with the active twins — `rocep1s0f0` and `roceP2p1s0f0` — are what NCCL should be pointed at via `NCCL_IB_HCA` (see VLLM.md).
 
 ## SSH between nodes
 
@@ -154,7 +166,7 @@ chmod 0600 $HOME/.ssh/*
 
 Copy the files to the other node:
 ```bash
-scp -r $HOME/.ssh 172.31.5.4:~
+scp -r $HOME/.ssh 172.31.5.2:~
 ```
 
 You can now ssh from one node to the other without entering passwords.

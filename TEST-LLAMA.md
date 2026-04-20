@@ -22,6 +22,7 @@ Start the model from the ray head:
 screen
 
 export VLLM_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '^node-[0-9]+$')
+
 docker exec -it $VLLM_CONTAINER /bin/bash -c '
   vllm serve meta-llama/Llama-3.3-70B-Instruct \
     --tensor-parallel-size 2 --max_model_len 2048'
