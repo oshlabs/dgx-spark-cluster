@@ -69,7 +69,7 @@ Run N concurrent identical requests in the background and let `wait` block until
 for i in $(seq 1 N); do (curl -s http://172.31.0.100:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"MiniMax-M2.7","messages":[{"role":"user","content":"Count from 1 to 500 as a comma-separated list."}],"max_tokens":500,"temperature":0,"stream":false}' | jq '.usage') & done; wait
 ```
 
-Watch the engine logs on the head node (`screen -r ray-head`) during the run for the `Running: N reqs` and `Avg generation throughput` lines. `Temperature: 0` and identical prompts give stable output lengths and high prefix-cache hit rates, which is fine for measuring the decode curve but means these numbers are an **upper bound** for real workloads (unique prompts force real prefill work and reduce aggregate decode throughput).
+Watch the engine logs on the head node (`screen -r ray-head`) during the run for the `Running: N reqs` and `Avg generation throughput` lines. `Temperature: 0` and identical prompts give stable output lengths and very high prefix-cache hit rates — we observed `Prefix cache hit rate` climbing from ~47% at 2 concurrent to ~91% at 16 and ~92% at 32 as more streams landed on the same cached prefix. That's fine for measuring the decode curve in isolation, but it means these numbers are an **upper bound** for real workloads: unique prompts force real prefill work on every request, which eats into the decode budget and reduces aggregate throughput. Treat the table below as the decode ceiling, not a production capacity estimate.
 
 ### Results
 
