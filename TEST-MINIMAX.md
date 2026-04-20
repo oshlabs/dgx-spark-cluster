@@ -1,6 +1,6 @@
 # Test — MiniMax-M2.7 (NVFP4 quantized)
 
-Prerequisite: cluster is up and `hf auth login` completed — see [INSTALL.md](INSTALL.md).
+Prerequisite: cluster is up and `hf auth login` completed — see [VLLM.md](VLLM.md).
 
 ## Download the model
 

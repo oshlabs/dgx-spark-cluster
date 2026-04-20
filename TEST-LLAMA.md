@@ -1,6 +1,6 @@
 # Test — Meta Llama-3.3-70B-Instruct
 
-Prerequisite: cluster is up and `hf auth login` completed — see [INSTALL.md](INSTALL.md).
+Prerequisite: cluster is up and `hf auth login` completed — see [VLLM.md](VLLM.md).
 
 ## Unlock the model
 

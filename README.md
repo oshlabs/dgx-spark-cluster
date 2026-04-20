@@ -6,7 +6,8 @@ Each node is a Grace Blackwell GB10 machine with 120 GB unified memory. The two 
 
 ## Contents
 
-- [INSTALL.md](INSTALL.md) — system prep, networking, SSH, vLLM container, Ray head/worker setup
+- [SYSTEM.md](SYSTEM.md) — per-node OS prep: user, services cleanup, networking, SSH
+- [VLLM.md](VLLM.md) — vLLM container, Ray head/worker, Huggingface cli/login
 - [TEST-LLAMA.md](TEST-LLAMA.md) — serving Meta Llama-3.3-70B-Instruct
 - [TEST-MINIMAX.md](TEST-MINIMAX.md) — serving MiniMax-M2.7 (NVFP4 quantized)
 
